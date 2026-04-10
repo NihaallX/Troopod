@@ -1,59 +1,72 @@
-# Ad → Landing Page Personalizer
-### Troopod AI PM Assignment
+# Ad -> Landing Page Personalizer
 
----
+Troopod AI PM Assignment
 
-## Deploy to Vercel (5 minutes)
+Turn ad clicks into message-matched landing pages in one run.
 
-### 1. Get a Groq API key
-Go to https://console.groq.com/keys → Create API Key
+This project takes an ad creative plus a landing page URL and returns a personalized version of that page where headline, CTA, and value prop align with the ad promise.
 
-### 2. Push to GitHub
-```bash
-git init
-git add .
-git commit -m "init"
-git remote add origin https://github.com/YOUR_USERNAME/troopod-assignment.git
-git push -u origin main
-```
+## Screenshots
 
-### 3. Deploy on Vercel
-1. Go to https://vercel.com/new
-2. Import your GitHub repo
-3. In **Environment Variables**, add:
-   - Key: `GROQ_API_KEY`
-   - Value: `gsk_...` (your key from step 1)
-4. Click **Deploy**
+### Home screen
 
-Done — your live link is ready to submit.
+![Ad to Landing Page Personalizer Home](public/screenshots/home.png)
 
----
+### Personalized output (before vs after)
 
-## Run locally
-
-```bash
-npm install
-cp .env.example .env.local
-# add your API key to .env.local
-npm run dev
-```
-
-Open http://localhost:3000
-
----
+![Ad to Landing Page Personalizer Result](public/screenshots/result.png)
 
 ## How it works
 
-**3-agent pipeline:**
+### Agent 1: Ad Creative Analyzer
 
-1. **Ad Creative Analyzer** — Accepts image upload (base64 vision) or image URL. Sends to Groq and extracts structured JSON: headline, CTA, value prop, tone, audience, color scheme.
+- Input: ad image upload or ad image URL
+- Model: Groq with `meta-llama/llama-4-scout-17b-16e-instruct`
+- Output: strict JSON fields (headline, subheadline, CTA, value proposition, audience, tone, language mix, colors, benefits, badges, disclaimer, urgency)
+- Reliability: `safeAnalysis` defaults ensure malformed/null fields are normalized before downstream usage
 
-2. **Landing Page Analyzer** — Fetches the target URL server-side (no CORS issues), parses DOM to extract title, headings, and body text. Falls back to URL-context inference if the page blocks fetching.
+### Agent 2: Landing Page Parser + Design Extractor
 
-3. **Personalization Engine** — Takes ad analysis + page content, generates a complete HTML landing page with perfect message-match. Mirrors the ad's exact headline, CTA, tone and color scheme.
+- Fetches target page server-side via API route to avoid browser CORS issues
+- Returns both raw HTML and extracted text summary
+- Parses raw HTML DOM to extract current page elements (h1, h2, CTA, hero paragraph)
+- Captures live screenshot through Microlink and extracts page design system (brand colors, font style, layout, CTA style, tone)
 
-**Key design decisions:**
-- API key is server-side only (Next.js API route) — never exposed to the browser
-- Landing page fetch is server-side too — no CORS problems
-- Fallback handling at every step so the pipeline never hard-fails
-- Output is self-contained HTML — no external dependencies, fully portable
+### Agent 3: Personalization Engine
+
+- Static/SSR pages: returns a constrained JSON diff, then applies targeted DOM edits (headline, subheadline, CTA, value prop) and injects brand color variables
+- SPA pages: if both h1 and h2 are empty after extraction, switches to generation mode and creates a brand-matched Tailwind HTML page using extracted design-system cues
+
+## Why this is useful
+
+- Fixes message mismatch between ad copy and landing page copy
+- Preserves original brand feel for static pages via surgical edits
+- Handles modern SPA pages with a design-system aware fallback
+- Gives a clear side-by-side before/after preview for fast review
+
+## Guardrails
+
+- Strict JSON formats in analysis and diff steps reduce drift
+- Server-side API key handling keeps secrets out of the browser
+- Preview sanitization strips unsafe scripts/CSP/preload noise and injects base URL for cleaner rendering
+- SPA branch and static branch are intentionally separated for predictable behavior
+
+## Tech Stack
+
+- Next.js 14 + React 18
+- Groq API (`meta-llama/llama-4-scout-17b-16e-instruct`) for all model calls
+- Microlink for screenshot capture
+- Stateless flow (no database)
+
+## Deploy on Vercel
+
+1. Push this repository to GitHub.
+2. Import it in Vercel: https://vercel.com/new
+3. Add environment variable:
+   - Key: `GROQ_API_KEY`
+   - Value: your Groq key
+4. Deploy.
+
+## Notes
+
+- API route name is still `/api/claude` for backward compatibility, but it routes to Groq.
